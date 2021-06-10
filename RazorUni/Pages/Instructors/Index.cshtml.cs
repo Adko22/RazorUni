@@ -1,0 +1,67 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
+using RazorUni.Data;
+using RazorUni.Models;
+using RazorUni.Models.SchoolViewModel;
+
+namespace RazorUni.Pages.Instructors
+{
+    public class IndexModel : PageModel
+    {
+        private readonly RazorUni.Data.RazorUniContext _context;
+
+        public IndexModel(RazorUni.Data.RazorUniContext context)
+        {
+            _context = context;
+        }
+
+        public InstructorIndexData InstructorData { get; set; }
+        public int InstructorID { get; set; }
+        public int CourseID { get; set; }
+
+        public async Task OnGetAsync(int? id, int? CourseID)
+        {
+            InstructorData = new InstructorIndexData();
+            InstructorData.Instructors = await _context.Instructors
+                .Include(i => i.OfficeAssignment)
+                .Include(i => i.CourseAssignments)
+                .ThenInclude(i => i.Course)
+                .ThenInclude(i => i.Department)
+               // .Include(i => i.CourseAssignments)
+                //.ThenInclude(i => i.Course)
+                //.ThenInclude(i => i.Enrollments)
+                //.ThenInclude(i => i.Student)
+                //.AsNoTracking()
+                .OrderBy(i => i.LastName)
+                .ToListAsync();
+
+            if (id != null)
+            {
+                InstructorID = id.Value;
+                Instructor instructor = InstructorData.Instructors
+                    .Where(i => i.ID == id.Value).Single();
+                InstructorData.Courses = instructor.CourseAssignments.Select(s => s.Course);
+            }
+
+            if(CourseID!=null)
+            {
+                CourseID= CourseID.Value;
+                var selectedCourse = InstructorData.Courses
+                    .Where(x => x.CourseID == CourseID).Single();
+                await _context.Entry(selectedCourse).Collection(x => x.Enrollments).LoadAsync();
+                foreach(Enrollment enrollment in selectedCourse.Enrollments)
+                {
+                    await _context.Entry(enrollment).Reference(x => x.Student).LoadAsync();
+                }
+                
+                InstructorData.Enrollments = selectedCourse.Enrollments;
+            }
+        }
+    }
+}
